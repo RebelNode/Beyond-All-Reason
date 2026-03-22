@@ -53,6 +53,7 @@ float sizemultiplier = dataIn[0].v_sizemodifiers.x;
 #define BITGETPROGRESS 32u
 #define BITFLASHBAR 64u
 #define BITCOLORCORRECT 128u
+#define BITCOUNTDOWN 256u
 
 void emitVertexBG(in vec2 pos){
 	g_uv.xy = vec2(0.0,0.0);
@@ -135,7 +136,11 @@ void main(){
 			if (health > 0.999) return;
 		}else{
 			if ((BARTYPE & BITGETPROGRESS) > 0u) { // reload bar?
-				if (health > 0.999) return;
+				if ((BARTYPE & BITCOUNTDOWN) > 0u) {
+					if (health < 0.001) return; // countdown finished
+				} else {
+					if (health > 0.999) return; // count-up done
+				}
 			}
 			if ((BARTYPE & BITUSEOVERLAY) > 0u){ // for textured percentage bars bars
 			//	if (health > 0.995) return;
@@ -202,7 +207,7 @@ void main(){
 	// EMIT BAR FOREGROUND, ok this is harder than i thought
 
 		float healthbasedpos = (2*(BARWIDTH -  BARCORNER) - 2 * SMALLERCORNER) * health  ;
-		if ((BARTYPE & BITTIMELEFT) > 0u) healthbasedpos =  (2*(BARWIDTH -  BARCORNER) - 2 * SMALLERCORNER); // full bar for timer based shit
+		if ((BARTYPE & BITTIMELEFT) > 0u && (BARTYPE & BITCOUNTDOWN) == 0u) healthbasedpos =  (2*(BARWIDTH -  BARCORNER) - 2 * SMALLERCORNER); // full bar for timer based shit
 		if ((BARTYPE & BITCOLORCORRECT) > 0u) { truecolor.rgb = truecolor.rgb/max(truecolor.r, truecolor.g); } // color correction for health
 		truecolor.a = 1.0;
 		botcolor = truecolor;
@@ -258,9 +263,15 @@ void main(){
 		float msb ;
 		float glyphpctsecatlas;
 		if ((BARTYPE & BITTIMELEFT) > 0u){ //display time
-			health = (health - 1.0) / (1.0/40.0);
-			lsb = abs(floor(mod(health, 10.0)));
-			msb = abs( floor(mod(health*0.1, 10.0)));
+			if ((BARTYPE & BITCOUNTDOWN) > 0u) {
+				float secondsLeft = health * 30.0; // health 1.0->0.0 over 30 seconds
+				lsb = abs(floor(mod(secondsLeft, 10.0)));
+				msb = abs(floor(mod(secondsLeft * 0.1, 10.0)));
+			} else {
+				health = (health - 1.0) / (1.0/40.0);
+				lsb = abs(floor(mod(health, 10.0)));
+				msb = abs( floor(mod(health*0.1, 10.0)));
+			}
 			glyphpctsecatlas = 14.0; // seconds
 		}else{
 			lsb = floor(mod(health*100.0, 10.0));

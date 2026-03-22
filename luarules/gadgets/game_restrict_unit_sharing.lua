@@ -20,12 +20,22 @@ if not Spring.GetModOptions().easytax then
 	return false
 end
 
+local DEBUFF_FRAMES = 30 * 30 -- 30 seconds at 30 game frames per second
+local debuffedUnits = {} -- unitID -> { expireFrame, buildSpeed }
+
 -- gather all economy/builder units
 local ecoUnits = {}
+local builderUnits = {}
 local commanders = {}
 for unitDefID, unitDef in pairs(UnitDefs) do
-	if unitDef.customParams.unitgroup and (unitDef.customParams.unitgroup == "energy" or unitDef.customParams.unitgroup == "metal" or unitDef.customParams.unitgroup == "builder" or unitDef.customParams.unitgroup == "buildert2" or unitDef.customParams.unitgroup == "buildert3") then
-		ecoUnits[unitDefID] = true
+	local group = unitDef.customParams.unitgroup
+	if group then
+		if group == "builder" or group == "buildert2" or group == "buildert3" then
+			builderUnits[unitDefID] = true
+			ecoUnits[unitDefID] = true
+		elseif group == "energy" or group == "metal" then
+			ecoUnits[unitDefID] = true
+		end
 	end
 	if unitDef.customParams.iscommander then
 		commanders[unitDefID] = true
@@ -46,9 +56,36 @@ function gadget:AllowUnitTransfer(unitID, unitDefID, fromTeamID, toTeamID, captu
 		end
 		return false
 	end
-    if ecoUnits[unitDefID] then
-        local _, maxHealth, _ = Spring.GetUnitHealth(unitID)
-        Spring.AddUnitDamage(unitID, maxHealth*5, 30) -- Stun for 30 seconds.
-    end
+	if builderUnits[unitDefID] then
+		local unitDef = UnitDefs[unitDefID]
+		local startFrame = Spring.GetGameFrame()
+		local expireFrame = startFrame + DEBUFF_FRAMES
+		Spring.SetUnitBuildSpeed(unitID, 0.01)
+		debuffedUnits[unitID] = {
+			expireFrame = expireFrame,
+			buildSpeed  = unitDef.buildSpeed or 0,
+		}
+		SendToUnsynced("unitBuildspeedDebuff", unitID, startFrame, expireFrame)
+	elseif ecoUnits[unitDefID] then
+		local _, maxHealth = Spring.GetUnitHealth(unitID)
+		Spring.AddUnitDamage(unitID, maxHealth * 5, 30) -- Stun for 30 seconds.
+	end
 	return true
+end
+
+function gadget:GameFrame(n)
+	for unitID, data in pairs(debuffedUnits) do
+		if n >= data.expireFrame then
+			Spring.SetUnitBuildSpeed(unitID, data.buildSpeed)
+			debuffedUnits[unitID] = nil
+			SendToUnsynced("unitBuildspeedDebuffEnd", unitID)
+		end
+	end
+end
+
+function gadget:UnitDestroyed(unitID)
+	if debuffedUnits[unitID] then
+		debuffedUnits[unitID] = nil
+		SendToUnsynced("unitBuildspeedDebuffEnd", unitID)
+	end
 end

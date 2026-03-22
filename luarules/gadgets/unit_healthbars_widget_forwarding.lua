@@ -161,6 +161,18 @@ else
 		end
 	end
 
+	function unitBuildspeedDebuff(cmd, unitID, startFrame, expireFrame)
+		if Script.LuaUI("UnitBuildspeedDebuffHealthbars") then
+			Script.LuaUI.UnitBuildspeedDebuffHealthbars(unitID, startFrame, expireFrame)
+		end
+	end
+
+	function unitBuildspeedDebuffEnd(cmd, unitID)
+		if Script.LuaUI("UnitBuildspeedDebuffEndHealthbars") then
+			Script.LuaUI.UnitBuildspeedDebuffEndHealthbars(unitID)
+		end
+	end
+
 	function gadget:FeatureDestroyed(featureID, allyTeamID)
 		forwardedFeatureIDsResurrect[featureID] = nil
 		forwardedFeatureIDsReclaim[featureID] = nil
@@ -189,11 +201,15 @@ else
 		gadgetHandler:AddSyncAction("featureReclaimFrame", featureReclaimFrame)
 		gadgetHandler:AddSyncAction("unitCaptureFrame", unitCaptureFrame)
 		gadgetHandler:AddSyncAction("projetileCreatedReload", projetileCreatedReload)
+		gadgetHandler:AddSyncAction("unitBuildspeedDebuff", unitBuildspeedDebuff)
+		gadgetHandler:AddSyncAction("unitBuildspeedDebuffEnd", unitBuildspeedDebuffEnd)
 	end
 
 	function gadget:ShutDown()
 		gadgetHandler:RemoveSyncAction("featureReclaimFrame")
 		gadgetHandler:RemoveSyncAction("unitCaptureFrame")
 		gadgetHandler:RemoveSyncAction("projetileCreatedReload")
+		gadgetHandler:RemoveSyncAction("unitBuildspeedDebuff")
+		gadgetHandler:RemoveSyncAction("unitBuildspeedDebuffEnd")
 	end
 end

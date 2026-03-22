@@ -213,6 +213,7 @@ local bitIntegerNumber = 16
 local bitGetProgress = 32
 local bitFlashBar = 64
 local bitColorCorrect = 128
+local bitCountdown = 256
 
 -- unit uniform index map:
 -- 0: building
@@ -300,6 +301,14 @@ local barTypeMap = { -- WHERE SHOULD WE STORE THE FUCKING COLORS?
 		uniformindex = 4, -- if its >20, then its health/maxhealth
 		uvoffset = 0.8125, -- the X offset of the icon for this bar
 	},
+	buildspeed_debuff = {
+		mincolor = {1.0, 0.5, 0.0, 1.0},
+		maxcolor = {1.0, 0.7, 0.0, 1.0},
+		bartype = bitShowGlyph + bitUseOverlay + bitGetProgress + bitTimeLeft + bitFlashBar + bitCountdown,
+		hidethreshold = 0.001,
+		uniformindex = 2, -- BITGETPROGRESS reads slots 2 (start) and 3 (end)
+		uvoffset = 0.9375, -- builder icon
+	},
 	featurehealth = {
 		mincolor = {0.25, 0.25, 0.25, 1.0},
 		maxcolor = {0.65, 0.65, 0.65, 1.0},
@@ -379,6 +388,7 @@ local unitShieldWatch = {} -- maps unitID to last shield value
 local unitReactiveArmorWatch = {}
 local unitEmpDamagedWatch = {}
 local unitParalyzedWatch = {}
+local unitBuildspeedDebuffWatch = {}
 local unitStockPileWatch = {}
 local unitReloadWatch = {}
 
@@ -747,6 +757,17 @@ local function addBarsForUnit(unitID, unitDefID, unitTeam, unitAllyTeam, reason)
 			end
 		end
 	end
+
+	local debuffData = unitBuildspeedDebuffWatch[unitID]
+	if debuffData then
+		addBarForUnit(unitID, unitDefID, "buildspeed_debuff", reason)
+		if gl.SetUnitBufferUniforms then
+			uniformcache[1] = debuffData.expireFrame
+			gl.SetUnitBufferUniforms(unitID, uniformcache, 2)
+			uniformcache[1] = debuffData.startFrame
+			gl.SetUnitBufferUniforms(unitID, uniformcache, 3)
+		end
+	end
 end
 
 local function removeBarsFromUnit(unitID, reason)
@@ -837,6 +858,7 @@ local function init()
 	unitReactiveArmorWatch = {}
 	unitEmpDamagedWatch = {}
 	unitParalyzedWatch = {}
+	unitBuildspeedDebuffWatch = {}
 	unitStockPileWatch = {}
 	unitReloadWatch = {}
 	unitBars = {}
@@ -943,6 +965,24 @@ local function UnitParalyzeDamageHealthbars(unitID, unitDefID, damage)
 	end
 end
 
+local function UnitBuildspeedDebuffHealthbars(unitID, startFrame, expireFrame)
+	unitBuildspeedDebuffWatch[unitID] = {startFrame = startFrame, expireFrame = expireFrame}
+	local unitDefID = spGetUnitDefID(unitID)
+	addBarForUnit(unitID, unitDefID, "buildspeed_debuff", 'UnitBuildspeedDebuffHealthbars')
+	if gl.SetUnitBufferUniforms then
+		-- Swapped: slot2 = expireFrame, slot3 = startFrame so formula gives countdown 1.0 -> 0.0
+		uniformcache[1] = expireFrame
+		gl.SetUnitBufferUniforms(unitID, uniformcache, 2)
+		uniformcache[1] = startFrame
+		gl.SetUnitBufferUniforms(unitID, uniformcache, 3)
+	end
+end
+
+local function UnitBuildspeedDebuffEndHealthbars(unitID)
+	unitBuildspeedDebuffWatch[unitID] = nil
+	removeBarFromUnit(unitID, "buildspeed_debuff", 'UnitBuildspeedDebuffEndHealthbars')
+end
+
 local function ProjectileCreatedReloadHB(projectileID, unitID, weaponID, unitDefID)
 	local unitDefID = spGetUnitDefID(unitID)
 
@@ -999,6 +1039,8 @@ function widget:Initialize()
 	widgetHandler:RegisterGlobal("UnitCaptureStartedHealthbars", UnitCaptureStartedHealthbars )
 	widgetHandler:RegisterGlobal("UnitParalyzeDamageHealthbars", UnitParalyzeDamageHealthbars )
 	widgetHandler:RegisterGlobal("ProjectileCreatedReloadHB", ProjectileCreatedReloadHB )
+	widgetHandler:RegisterGlobal("UnitBuildspeedDebuffHealthbars", UnitBuildspeedDebuffHealthbars )
+	widgetHandler:RegisterGlobal("UnitBuildspeedDebuffEndHealthbars", UnitBuildspeedDebuffEndHealthbars )
 end
 
 function widget:Shutdown()
@@ -1006,6 +1048,8 @@ function widget:Shutdown()
 	widgetHandler:DeregisterGlobal("UnitCaptureStartedHealthbars" )
 	widgetHandler:DeregisterGlobal("UnitParalyzeDamageHealthbars" )
 	widgetHandler:DeregisterGlobal("ProjectileCreatedReloadHB" )
+	widgetHandler:DeregisterGlobal("UnitBuildspeedDebuffHealthbars" )
+	widgetHandler:DeregisterGlobal("UnitBuildspeedDebuffEndHealthbars" )
 	spEcho("Healthbars GL4 unloaded hooks")
 end
 
@@ -1034,6 +1078,7 @@ function widget:VisibleUnitsChanged(extVisibleUnits, extNumVisibleUnits)
 	unitCaptureWatch = {}
 	unitEmpDamagedWatch = {}
 	unitParalyzedWatch = {}
+	unitBuildspeedDebuffWatch = {}
 	unitStockPileWatch = {}
 	unitReloadWatch = {}
 	spec, fullview = spGetSpectatingState()
